@@ -63,7 +63,7 @@ jobs:
         cp rtl8189fs/8189fs.ko output_driver/
 
     - name: Upload Artifact (File .ko)
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: 8189fs-driver-ophub-${{ env.KERNEL_VERSION }}
         path: output_driver/8189fs.ko
