@@ -1,7 +1,7 @@
-name: Build WiFi Driver RTL8189FS (jwrdegoede)
+name: "Build WiFi Driver RTL8189FS"
 
 on:
-  workflow_dispatch: # Jalankan manual dari tab Actions
+  workflow_dispatch:
 
 env:
   KERNEL_VERSION: "6.1.161"
@@ -10,61 +10,51 @@ env:
 jobs:
   build-driver-jwrdegoede:
     runs-on: ubuntu-22.04
-    
+
     steps:
-    - name: Menginstal Cross-Compiler (ARM64) & Dependensi
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential crossbuild-essential-arm64 bison flex \
-        libssl-dev bc wget unzip rsync kmod git
-        sudo apt-get clean
+      - name: "Menginstal Cross-Compiler dan Dependensi"
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential crossbuild-essential-arm64 bison flex libssl-dev bc wget unzip rsync kmod git
+          sudo apt-get clean
 
-    - name: Download Source Code Linux Kernel
-      run: |
-        wget -qO linux.tar.xz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${{ env.KERNEL_VERSION }}.tar.xz
-        tar -xf linux.tar.xz
-        echo "KDIR=$PWD/linux-${{ env.KERNEL_VERSION }}" >> $GITHUB_ENV
+      - name: "Download Source Code Linux Kernel"
+        run: |
+          wget -qO linux.tar.xz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${{ env.KERNEL_VERSION }}.tar.xz
+          tar -xf linux.tar.xz
+          echo "KDIR=$PWD/linux-${{ env.KERNEL_VERSION }}" >> $GITHUB_ENV
 
-    - name: Prepare Kernel & Inject Vermagic (-ophub)
-      run: |
-        cd ${{ env.KDIR }}
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
-        
-        sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="${{ env.KERNEL_SUFFIX }}"/g' .config
-        
-        # Mematikan preempt agar Vermagic sesuai dengan STB
-        sed -i 's/CONFIG_PREEMPT=y/# CONFIG_PREEMPT is not set/g' .config
-        sed -i 's/CONFIG_PREEMPT_VOLUNTARY=y/# CONFIG_PREEMPT_VOLUNTARY is not set/g' .config
-        echo "CONFIG_PREEMPT_NONE=y" >> .config
-        
-        # Aktifkan wireless module di kernel config
-        sed -i 's/# CONFIG_WIRELESS is not set/CONFIG_WIRELESS=y/g' .config
-        echo "CONFIG_CFG80211=m" >> .config
-        echo "CONFIG_MAC80211=m" >> .config
-        
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+      - name: "Prepare Kernel dan Inject Vermagic"
+        run: |
+          cd ${{ env.KDIR }}
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
+          sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="${{ env.KERNEL_SUFFIX }}"/g' .config
+          sed -i 's/CONFIG_PREEMPT=y/# CONFIG_PREEMPT is not set/g' .config
+          sed -i 's/CONFIG_PREEMPT_VOLUNTARY=y/# CONFIG_PREEMPT_VOLUNTARY is not set/g' .config
+          echo "CONFIG_PREEMPT_NONE=y" >> .config
+          sed -i 's/# CONFIG_WIRELESS is not set/CONFIG_WIRELESS=y/g' .config
+          echo "CONFIG_CFG80211=m" >> .config
+          echo "CONFIG_MAC80211=m" >> .config
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
-    - name: Clone Driver RTL8189FS (Repo: jwrdegoede)
-      run: |
-        # Mengambil spesifik branch rtl8189fs dari repositori jwrdegoede
-        git clone -b rtl8189fs https://github.com/jwrdegoede/rtl8189ES_linux.git rtl8189fs
+      - name: "Clone Driver RTL8189FS dari jwrdegoede"
+        run: |
+          git clone -b rtl8189fs https://github.com/jwrdegoede/rtl8189ES_linux.git rtl8189fs
 
-    - name: Compile Driver WiFi RTL8189FS
-      run: |
-        cd rtl8189fs
-        # KSRC dan KDIR disertakan untuk kompatibilitas Makefile
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=${{ env.KDIR }} KDIR=${{ env.KDIR }} modules
+      - name: "Compile Driver WiFi"
+        run: |
+          cd rtl8189fs
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=${{ env.KDIR }} KDIR=${{ env.KDIR }} modules
 
-    - name: Kumpulkan Hasil Build (.ko)
-      run: |
-        mkdir -p output_driver
-        # Menggunakan *.ko untuk berjaga-jaga jika nama outputnya 8189es.ko atau 8189fs.ko
-        cp rtl8189fs/*.ko output_driver/
+      - name: "Kumpulkan Hasil Build"
+        run: |
+          mkdir -p output_driver
+          cp rtl8189fs/*.ko output_driver/
 
-    - name: Upload Artifact (File .ko)
-      uses: actions/upload-artifact@v4
-      with:
-        name: 8189fs-driver-jwrdegoede-${{ env.KERNEL_VERSION }}
-        path: output_driver/*.ko
+      - name: "Upload Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8189fs-driver-jwrdegoede-${{ env.KERNEL_VERSION }}
+          path: output_driver/*.ko
