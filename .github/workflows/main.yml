@@ -1,0 +1,69 @@
+name: Build WiFi Driver RTL8189FS (Kernel Ophub)
+
+on:
+  workflow_dispatch: # Jalankan manual dari tab Actions
+
+env:
+  KERNEL_VERSION: "6.1.161"
+  KERNEL_SUFFIX: "-ophub"
+  WIFI_DRIVER_URL: "https://github.com/awanservers/rtl8189ES_linux_Driver_Wifi_STB_HG680P/archive/refs/heads/rtl8189fs.zip"
+
+jobs:
+  build-driver-ophub:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Menginstal Cross-Compiler (ARM64) & Dependensi
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential crossbuild-essential-arm64 bison flex \
+        libssl-dev bc wget unzip rsync kmod
+        sudo apt-get clean
+
+    - name: Download Source Code Linux Kernel
+      run: |
+        wget -qO linux.tar.xz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${{ env.KERNEL_VERSION }}.tar.xz
+        tar -xf linux.tar.xz
+        echo "KDIR=$PWD/linux-${{ env.KERNEL_VERSION }}" >> $GITHUB_ENV
+
+    - name: Prepare Kernel & Inject Vermagic (-ophub)
+      run: |
+        cd ${{ env.KDIR }}
+        # Buat konfigurasi standar untuk ARM64
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
+        
+        # Manipulasi nama kernel agar terbaca sebagai versi Ophub
+        sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="${{ env.KERNEL_SUFFIX }}"/g' .config
+        
+        # Aktifkan modul wireless di kernel agar driver WiFi bisa di-compile
+        sed -i 's/# CONFIG_WIRELESS is not set/CONFIG_WIRELESS=y/g' .config
+        echo "CONFIG_CFG80211=m" >> .config
+        echo "CONFIG_MAC80211=m" >> .config
+        
+        # Siapkan header kernel untuk compile module out-of-tree
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+
+    - name: Download & Ekstrak Source Code Driver RTL8189FS
+      run: |
+        wget -qO driver.zip ${{ env.WIFI_DRIVER_URL }}
+        unzip -q driver.zip
+        mv rtl8189ES_linux_Driver_Wifi_STB_HG680P-rtl8189fs rtl8189fs
+
+    - name: Compile Driver WiFi RTL8189FS
+      run: |
+        cd rtl8189fs
+        # Proses compile khusus untuk arsitektur ARM64 (Amlogic STB)
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=${{ env.KDIR }} KDIR=${{ env.KDIR }} modules
+
+    - name: Kumpulkan Hasil Build (.ko)
+      run: |
+        mkdir -p output_driver
+        cp rtl8189fs/8189fs.ko output_driver/
+
+    - name: Upload Artifact (File .ko)
+      uses: actions/upload-artifact@v3
+      with:
+        name: 8189fs-driver-ophub-${{ env.KERNEL_VERSION }}
+        path: output_driver/8189fs.ko
