@@ -1,4 +1,4 @@
-name: Build WiFi Driver RTL8189FS (Unifreq)
+name: Build WiFi Driver RTL8189FS (jwrdegoede)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ env:
   KERNEL_SUFFIX: "-ophub"
 
 jobs:
-  build-driver-unifreq:
+  build-driver-jwrdegoede:
     runs-on: ubuntu-22.04
     
     steps:
@@ -34,7 +34,7 @@ jobs:
         
         sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="${{ env.KERNEL_SUFFIX }}"/g' .config
         
-        # Mematikan preempt
+        # Mematikan preempt agar Vermagic sesuai dengan STB
         sed -i 's/CONFIG_PREEMPT=y/# CONFIG_PREEMPT is not set/g' .config
         sed -i 's/CONFIG_PREEMPT_VOLUNTARY=y/# CONFIG_PREEMPT_VOLUNTARY is not set/g' .config
         echo "CONFIG_PREEMPT_NONE=y" >> .config
@@ -46,27 +46,25 @@ jobs:
         
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
-    - name: Ekstrak Driver RTL8189FS dari Repo Unifreq
+    - name: Clone Driver RTL8189FS (Repo: jwrdegoede)
       run: |
-        # Menggunakan Git Sparse-Checkout untuk mengambil HANYA folder driver
-        # dari dalam repo kernel Unifreq tanpa mendownload seluruh isi kernelnya.
-        git clone --depth 1 --filter=blob:none --sparse https://github.com/unifreq/linux-6.1.y.git unifreq-repo
-        cd unifreq-repo
-        git sparse-checkout set drivers/net/wireless/realtek/rtl8189fs
-        mv drivers/net/wireless/realtek/rtl8189fs ../rtl8189fs
+        # Mengambil spesifik branch rtl8189fs dari repositori jwrdegoede
+        git clone -b rtl8189fs https://github.com/jwrdegoede/rtl8189ES_linux.git rtl8189fs
 
-    - name: Compile Driver WiFi RTL8189FS (Unifreq)
+    - name: Compile Driver WiFi RTL8189FS
       run: |
         cd rtl8189fs
+        # KSRC dan KDIR disertakan untuk kompatibilitas Makefile
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=${{ env.KDIR }} KDIR=${{ env.KDIR }} modules
 
     - name: Kumpulkan Hasil Build (.ko)
       run: |
         mkdir -p output_driver
-        cp rtl8189fs/8189fs.ko output_driver/
+        # Menggunakan *.ko untuk berjaga-jaga jika nama outputnya 8189es.ko atau 8189fs.ko
+        cp rtl8189fs/*.ko output_driver/
 
     - name: Upload Artifact (File .ko)
       uses: actions/upload-artifact@v4
       with:
-        name: 8189fs-driver-unifreq-${{ env.KERNEL_VERSION }}
-        path: output_driver/8189fs.ko
+        name: 8189fs-driver-jwrdegoede-${{ env.KERNEL_VERSION }}
+        path: output_driver/*.ko
