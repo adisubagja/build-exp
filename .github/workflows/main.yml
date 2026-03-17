@@ -1,7 +1,7 @@
 name: Build WiFi Driver RTL8189FS (jwrdegoede)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Jalankan manual dari tab Actions
 
 env:
   KERNEL_VERSION: "6.1.161"
@@ -39,7 +39,7 @@ jobs:
         sed -i 's/CONFIG_PREEMPT_VOLUNTARY=y/# CONFIG_PREEMPT_VOLUNTARY is not set/g' .config
         echo "CONFIG_PREEMPT_NONE=y" >> .config
         
-        # Aktifkan wireless module
+        # Aktifkan wireless module di kernel config
         sed -i 's/# CONFIG_WIRELESS is not set/CONFIG_WIRELESS=y/g' .config
         echo "CONFIG_CFG80211=m" >> .config
         echo "CONFIG_MAC80211=m" >> .config
