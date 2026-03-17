@@ -1,15 +1,14 @@
-name: Build WiFi Driver RTL8189FS (Kernel Ophub)
+name: Build WiFi Driver RTL8189FS (Unifreq)
 
 on:
-  workflow_dispatch: # Jalankan manual dari tab Actions
+  workflow_dispatch:
 
 env:
   KERNEL_VERSION: "6.1.161"
   KERNEL_SUFFIX: "-ophub"
-  WIFI_DRIVER_URL: "https://github.com/awanservers/rtl8189ES_linux_Driver_Wifi_STB_HG680P/archive/refs/heads/rtl8189fs.zip"
 
 jobs:
-  build-driver-ophub:
+  build-driver-unifreq:
     runs-on: ubuntu-22.04
     
     steps:
@@ -19,7 +18,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential crossbuild-essential-arm64 bison flex \
-        libssl-dev bc wget unzip rsync kmod
+        libssl-dev bc wget unzip rsync kmod git
         sudo apt-get clean
 
     - name: Download Source Code Linux Kernel
@@ -31,35 +30,34 @@ jobs:
     - name: Prepare Kernel & Inject Vermagic (-ophub)
       run: |
         cd ${{ env.KDIR }}
-        # Buat konfigurasi standar untuk ARM64
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
         
-        # Manipulasi nama kernel agar terbaca sebagai versi Ophub
         sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="${{ env.KERNEL_SUFFIX }}"/g' .config
         
-        # Mematikan fitur preempt agar Vermagic persis seperti STB
+        # Mematikan preempt
         sed -i 's/CONFIG_PREEMPT=y/# CONFIG_PREEMPT is not set/g' .config
         sed -i 's/CONFIG_PREEMPT_VOLUNTARY=y/# CONFIG_PREEMPT_VOLUNTARY is not set/g' .config
         echo "CONFIG_PREEMPT_NONE=y" >> .config
         
-        # Aktifkan modul wireless di kernel agar driver WiFi bisa di-compile
+        # Aktifkan wireless module
         sed -i 's/# CONFIG_WIRELESS is not set/CONFIG_WIRELESS=y/g' .config
         echo "CONFIG_CFG80211=m" >> .config
         echo "CONFIG_MAC80211=m" >> .config
         
-        # Siapkan header kernel untuk compile module out-of-tree
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
-    - name: Download & Ekstrak Source Code Driver RTL8189FS
+    - name: Ekstrak Driver RTL8189FS dari Repo Unifreq
       run: |
-        wget -qO driver.zip ${{ env.WIFI_DRIVER_URL }}
-        unzip -q driver.zip
-        mv rtl8189ES_linux_Driver_Wifi_STB_HG680P-rtl8189fs rtl8189fs
+        # Menggunakan Git Sparse-Checkout untuk mengambil HANYA folder driver
+        # dari dalam repo kernel Unifreq tanpa mendownload seluruh isi kernelnya.
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/unifreq/linux-6.1.y.git unifreq-repo
+        cd unifreq-repo
+        git sparse-checkout set drivers/net/wireless/realtek/rtl8189fs
+        mv drivers/net/wireless/realtek/rtl8189fs ../rtl8189fs
 
-    - name: Compile Driver WiFi RTL8189FS
+    - name: Compile Driver WiFi RTL8189FS (Unifreq)
       run: |
         cd rtl8189fs
-        # Proses compile khusus untuk arsitektur ARM64 (Amlogic STB)
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=${{ env.KDIR }} KDIR=${{ env.KDIR }} modules
 
     - name: Kumpulkan Hasil Build (.ko)
@@ -70,5 +68,5 @@ jobs:
     - name: Upload Artifact (File .ko)
       uses: actions/upload-artifact@v4
       with:
-        name: 8189fs-driver-ophub-${{ env.KERNEL_VERSION }}
+        name: 8189fs-driver-unifreq-${{ env.KERNEL_VERSION }}
         path: output_driver/8189fs.ko
